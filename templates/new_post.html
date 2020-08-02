@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Новая запись{% endblock %}
+{% block content %}
+
+    <div class='row justify-content-center'>
+        <div class='col-md-8 p-5'>
+            <div class='card'>
+                {% if edit %}
+                    <div class='card-header'>Редактировать пост</div>
+                    <div class='card-body'>
+                    <form method='post' enctype='multipart/form-data'
+                          action='{% url 'post_edit' author post.id %}'>
+                    {% csrf_token %}
+                    {{ form.as_p }}
+                    <div class='col-md-6 offset-md-4'>
+                        <button type='submit' class='btn btn-primary'>
+                            Сохранить изменения
+                        </button>
+                    </div>
+                {% else %}
+                    <div class='card-header'>Новая
+                        запись {{ user.username }}</div>
+                    <div class='card-body'>
+                    <form method='post' enctype='multipart/form-data'
+                          action='{% url 'new-post' %}'>
+                    {% csrf_token %}
+                    {{ form.as_p }}
+                    <div class='col-md-6 offset-md-4'>
+                        <button type='submit' class='btn btn-primary'>
+                            Создать новую запись
+                        </button>
+                    </div>
+                {% endif %}
+                </form>
+                </div>
+                </div>
+            </div>
+        </div>
+
+{% endblock %}
