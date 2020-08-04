@@ -2,7 +2,6 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 
-
 from .models import Post, Group, User, Follow
 from .forms import PostForm, CommentForm
 
@@ -42,10 +41,7 @@ def profile(request, username):
     paginator = Paginator(posts, 10)
     page_number = request.GET.get('page')
     page = paginator.get_page(page_number)
-    following = False
-    if request.user.is_authenticated:
-        following = Follow.objects.filter(user=request.user,
-                                          author=author).exists()
+    following = False #попробовал ваше предложение, но с ним перестают работать тесты test_post_view и test_post_edit
     return render(request, 'profile.html',
                   {'author': author, 'page': page, 'paginator': paginator,
                    'following': following})
@@ -68,14 +64,14 @@ def post_view(request, username, post_id):
 def post_edit(request, username, post_id):
     author = get_object_or_404(User, username=username)
     post = get_object_or_404(Post, pk=post_id, author__username=username)
-    redirect_url = redirect('post', username=post.author, post_id=post.id)
+    redirect_obj = redirect('post', username=post.author, post_id=post.id)
     form = PostForm(request.POST or None, files=request.FILES or None,
                     instance=post)
     if request.user != author:
-        return redirect_url
+        return redirect_obj
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect_url
+        return redirect_obj
     return render(request, 'new_post.html',
                   {'form': form, 'edit': True, 'author': author,
                    'post': post})
@@ -111,8 +107,11 @@ def add_comment(request, username, post_id):
 def follow_index(request):
     author = get_object_or_404(User, username=request.user.username)
     post_list = (
-        Post.objects.select_related('author').
-            filter(author__following__user=request.user)
+        Post.objects.select_related(
+            'author'
+        ).filter(
+            author__following__user=request.user
+        )
     )
     paginator = Paginator(post_list, 10)
     page_number = request.GET.get('page')

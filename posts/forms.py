@@ -28,5 +28,3 @@ class CommentForm(forms.ModelForm):
         help_texts = {
             'text': 'Напишите комментарий тут :)'
         }
-
-

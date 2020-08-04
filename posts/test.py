@@ -1,10 +1,12 @@
 import tempfile
-from PIL import Image
+
 from django.contrib.auth import get_user_model
-from django.test import TestCase, Client
-from django.test import override_settings
+from django.core.cache import cache
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
-from posts.models import Post, Group, Follow, Comment
+from PIL import Image
+
+from posts.models import Comment, Follow, Group, Post
 
 TEST_CACHES = {
     'default': {'BACKEND': 'django.core.cache.backends.dummy.DummyCache'}}
@@ -210,45 +212,71 @@ class TestImg(TestCase):
 
 class TestCache(TestCase):
     def setUp(self):
-        self.first_client = Client()
-        self.second_client = Client()
-        self.user = User.objects.create_user(username='TestUser',
-                                             password='ASKnfbg123_2')
-        self.first_client.force_login(self.user)
+        self.client = Client()
+        self.user = User.objects.create_user(
+            username='TestUser',
+            password='ASKnfbg123_2'
+        )
+        self.client.force_login(self.user)
 
     def test_cache(self):
-        self.second_client.get(reverse('index'))
-        self.first_client.post(reverse('new-post'), {'text': 'Test text'})
-        response = self.second_client.get(reverse('index'))
-        self.assertNotContains(response, 'Test text')
+        response = self.client.post(
+            reverse('new-post'),
+            data={'text': 'Test text'},
+            follow=True
+        )
+        post = Post.objects.first()
+        self.assertContains(response, 'Test text')
+        cache.clear()
+        response = self.client.get(reverse('index'))
+        self.assertContains(response, 'Test text')
 
 
 class TestFollowSystem(TestCase):
     def setUp(self):
         self.client = Client()
         self.following = User.objects.create_user(
-            username='TestFollowing', password='password')
-        self.follower = User.objects.create_user(username='TestFollower',
-                                                 password='password')
-        self.user = User.objects.create_user(username='user',
-                                             password='password')
-        self.post = Post.objects.create(author=self.following,
-                                        text='FollowTest')
+            username='TestFollowing', 
+            password='password'
+        )
+        self.follower = User.objects.create_user(
+            username='TestFollower',
+            password='password'
+        )
+        self.user = User.objects.create_user(
+            username='user',
+            password='password'
+        )
+        self.post = Post.objects.create(
+            author=self.following,
+            text='FollowTest'
+        )
         self.client.force_login(self.follower)
-        self.link = Follow.objects.filter(user=self.follower,
-                                          author=self.following)
+        self.link = Follow.objects.filter(
+            user=self.follower,
+            author=self.following
+        )
 
     def test_follow(self):
-        response = self.client.get(reverse('profile_follow', kwargs={
-            'username': self.following}), follow=True)
+        response = self.client.get(
+            reverse(
+                'profile_follow', 
+                kwargs={'username': self.following}
+            ), 
+            follow=True
+        )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(self.link.exists())
         self.assertEqual(1, Follow.objects.count())
 
     def test_unfollow(self):
         response = self.client.get(
-            reverse('profile_unfollow', kwargs={'username': self.following}),
-            follow=True)
+            reverse(
+                'profile_unfollow', 
+                kwargs={'username': self.following}
+                ),
+            follow=True
+            )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(self.link.exists())
         self.assertEqual(0, Follow.objects.count())
@@ -258,33 +286,55 @@ class TestFollowSystem(TestCase):
         follow_index_url = reverse('follow_index')
         response = self.client.get(follow_index_url)
         self.assertContains(response, self.post.text)
-
-        self.client.force_login(self.user)
-        response = self.client.get(follow_index_url)
+    
+    def test_not_follower_index(self):
+        response = self.client.get(reverse('follow_index'))
         self.assertNotContains(response, self.post.text)
 
 
 class TestComments(TestCase):
     def setUp(self):
-        self.logged_client = Client()
-        self.client = Client()
-        self.user = User.objects.create_user(username='user',
-                                             password='password')
-        self.post = Post.objects.create(author=self.user, text='TestText')
-        self.logged_client.force_login(self.user)
+        self.user = User.objects.create_user(
+            username='testuser',
+            password=12345
+        )
+        self.text = 'test_text'
+        self.post = Post.objects.create(
+            text=self.text, 
+            author=self.user
+        )
+        self.commenting_user = User.objects.create_user(
+            username='commenting_user',
+            password=12345
+        )
+        self.comment_text = 'test_comment'
 
-    def test_comment(self):
-        comment_url = reverse('add_comment', kwargs={'username': self.user,
-                                                     'post_id': self.post.id})
-        self.logged_client.post(comment_url, {'text': 'Test Comment'},
-                                follow=True)
 
-        comment = Comment.objects.filter(text='Test Comment').exists()
-        response = self.logged_client.get(comment_url, follow=True)
-        self.assertContains(response, 'Test Comment')
-        self.assertTrue(comment)
+    def test_auth_user_commenting(self):
+        self.client.force_login(self.commenting_user)
+        response = self.client.post(
+            reverse(
+                'add_comment', 
+                kwargs={
+                    'username': self.user.username,
+                    'post_id': self.post.pk
+                }
+            ),
+            {'text': self.comment_text}, 
+            follow=True
+        )
+        self.assertContains(response, self.comment_text)
 
-        self.client.post(comment_url, {'text': 'Unlogged Comment'},
-                         follow=True)
-        self.assertEqual(0, Comment.objects.filter(
-            text='Unlogged Comment').count())
+    def test_anon_user_commenting(self):
+        response = self.client.post(
+            reverse(
+                'add_comment', 
+                kwargs={
+                    'username': self.user.username,
+                    'post_id': self.post.pk
+                }
+            ),
+            {'text': self.comment_text}, 
+            follow=True
+        )
+        self.assertNotContains(response, self.comment_text)
