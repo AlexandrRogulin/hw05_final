@@ -41,7 +41,9 @@ def profile(request, username):
     paginator = Paginator(posts, 10)
     page_number = request.GET.get('page')
     page = paginator.get_page(page_number)
-    following = False #попробовал ваше предложение, но с ним перестают работать тесты test_post_view и test_post_edit
+    following = request.user.is_authenticated and Follow.objects.filter(
+        user=request.user, author=author
+    ).exists()
     return render(request, 'profile.html',
                   {'author': author, 'page': page, 'paginator': paginator,
                    'following': following})

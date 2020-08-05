@@ -61,11 +61,10 @@ class TestProfileAndPosts(TestCase):
     @override_settings(CACHES=TEST_CACHES)
     def test_post_view(self):
         self.logged_client.post(
-            reverse(
-                'new-post'), 
-                {'text': self.text, 'group': self.group.id},
-                follow=True
-            )
+            reverse('new-post'), 
+            {'text': self.text, 'group': self.group.id},
+            follow=True
+        )
         post = Post.objects.get(text=self.text)
         url_list = [
             self.logged_client.get(reverse('index')),
@@ -169,9 +168,10 @@ class TestImg(TestCase):
                     'post_edit',
                     kwargs={'username': self.user, 'post_id': self.post.id}
                 ),
-                    {'group': self.group.id,
-                    'text': 'post with image',
-                    'image': img}, redirect=True)
+                {'group': self.group.id,
+                'text': 'post with image',
+                'image': img}, redirect=True
+            )
 
         tag = '<img class='
 
@@ -220,16 +220,15 @@ class TestCache(TestCase):
         self.client.force_login(self.user)
 
     def test_cache(self):
-        response = self.client.post(
-            reverse('new-post'),
-            data={'text': 'Test text'},
-            follow=True
-        )
-        post = Post.objects.first()
-        self.assertContains(response, 'Test text')
-        cache.clear()
+        post = Post.objects.create(text='Test text', author=self.user)
         response = self.client.get(reverse('index'))
         self.assertContains(response, 'Test text')
+        post.delete()
+        response_second = self.client.get(reverse('index'))
+        self.assertEquals(response.content, response_second.content)
+        cache.clear()
+        response_third = self.client.get(reverse('index'))
+        self.assertNotEquals(response.content, response_third.content)
 
 
 class TestFollowSystem(TestCase):
@@ -308,7 +307,6 @@ class TestComments(TestCase):
             password=12345
         )
         self.comment_text = 'test_comment'
-
 
     def test_auth_user_commenting(self):
         self.client.force_login(self.commenting_user)
